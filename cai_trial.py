@@ -7,8 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/1DZKn6uzxnZyJYKrX_DSN4KzQHsp_5ON6
 """
 
-pip install PyPDF2 sentence-transformers faiss-cpu rank-bm25 streamlit
-
 import os
 import re
 import numpy as np
