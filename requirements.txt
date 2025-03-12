@@ -1,8 +1,6 @@
-PyPDF2 
-sentence-transformers 
-faiss-cpu 
-rank-bm25 
 streamlit
-os
-re
 numpy
+PyPDF2
+faiss-cpu
+sentence-transformers
+rank-bm25
