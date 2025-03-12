@@ -163,7 +163,7 @@ def retrieve(query, chunks, embedding_index, embeddings, embed_model, bm25, toke
 #########################
 # Response Generation using a Small Open-Source Language Model
 #########################
-def generate_response(query, context, generator, max_length=150):
+def generate_response(query, context, generator, max_new_tokens=150):
     """
     Generate a synthesized response based on the query and retrieved context.
     
@@ -177,7 +177,7 @@ def generate_response(query, context, generator, max_length=150):
         str: The generated answer.
     """
     prompt = f"Question: {query}\nContext: {context}\nAnswer:"
-    generated = generator(prompt, max_length=max_length, num_return_sequences=1)
+    generated = generator(prompt, max_new_tokens=max_new_tokens, num_return_sequences=1)
     return generated[0]['generated_text']
 
 #########################
@@ -220,7 +220,7 @@ def main():
                 st.write(top_candidate)
                 st.write(f"**Confidence Score:** {confidence:.2f}")
                 # Generate a final answer using the retrieved context and the generator
-                final_answer = generate_response(query, top_candidate, generator, max_length=150)
+                final_answer = generate_response(query, top_candidate, generator, max_new_tokens=150)
                 st.write("### Generated Answer:")
                 st.write(final_answer)
             else:
