@@ -174,19 +174,19 @@ def main():
         chunks = process_pdfs(uploaded_files, chunk_size=500, overlap=50)
         st.write(f"Total text chunks generated: {len(chunks)}")
 
-        # 2. Load models for embedding and re-ranking
+        # Load models for embedding and re-ranking
         with st.spinner("Loading models..."):
             embed_model = SentenceTransformer('all-MiniLM-L6-v2')
             cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
 
-        # 3. Build indexes
+        # Build indexes
         st.write("Building vector index with FAISS...")
         embedding_index, embeddings = create_embedding_index(chunks, embed_model)
         st.write("Building BM25 index...")
         bm25, tokenized_corpus = create_bm25_index(chunks)
         st.success("Indices built successfully!")
 
-        # 4. Accept user query via UI
+        # Accept user query via UI
         st.header("Query Financial Data")
         query = st.text_input("Enter your financial query:")
         if st.button("Submit Query") and query:
@@ -198,25 +198,6 @@ def main():
                 st.write(f"**Confidence Score:** {confidence:.2f}")
             else:
                 st.write("No answer due to guard rail filtering.")
-
-        # 5. Testing & Validation Section
-        st.sidebar.title("Testing & Validation")
-        st.sidebar.write("Click a test query to evaluate the system:")
-        test_queries = {
-            "High Confidence Financial Query": "What was the revenue growth in Q4 2023?",
-            "Low Confidence Financial Query": "How did the company manage expenses during market volatility?",
-            "Irrelevant Query": "What is the capital of France?"
-        }
-        for label, test_query in test_queries.items():
-            if st.sidebar.button(label):
-                result = retrieve(test_query, chunks, embedding_index, embeddings, embed_model, bm25, tokenized_corpus, cross_encoder, top_k=5)
-                st.sidebar.write(f"**Query:** {test_query}")
-                if result:
-                    answer, confidence, _ = result
-                    st.sidebar.write("**Answer:**", answer)
-                    st.sidebar.write("**Confidence Score:**", confidence)
-                else:
-                    st.sidebar.write("Query was filtered out.")
     else:
         st.info("Please upload exactly 2 PDF files to proceed.")
 
