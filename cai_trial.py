@@ -128,7 +128,7 @@ def retrieve(query, chunks, embedding_index, embeddings, embed_model, bm25, toke
     # Input-Side Guard Rail: Basic filtering for financial-related keywords.
     def retrieve(query, chunks, embedding_index, embeddings, embed_model, bm25, tokenized_corpus, cross_encoder, top_k=5):
     # Updated guard rail keywords
-    finance_keywords = [
+        finance_keywords = [
         'revenue', 'profit', 'financial', 'income', 'expense', 'cash', 
         'growth', 'market', 'cost', 'margin', 'operating'
     ]
