@@ -7,7 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/1DZKn6uzxnZyJYKrX_DSN4KzQHsp_5ON6
 """
 
-import os
 import re
 import numpy as np
 import PyPDF2
@@ -19,15 +18,14 @@ from rank_bm25 import BM25Okapi
 #########################
 # Data Collection & Preprocessing
 #########################
-def extract_text_from_pdf(pdf_path):
-    """Extract text from a PDF file."""
+def extract_text_from_pdf(pdf_file):
+    """Extract text from an Uploaded PDF file."""
     text = ""
-    with open(pdf_path, "rb") as file:
-        reader = PyPDF2.PdfReader(file)
-        for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text + "\n"
+    reader = PyPDF2.PdfReader(pdf_file)
+    for page in reader.pages:
+        page_text = page.extract_text()
+        if page_text:
+            text += page_text + "\n"
     return text
 
 def clean_text(text):
@@ -38,12 +36,12 @@ def clean_text(text):
 def chunk_text(text, chunk_size=500, overlap=50):
     """
     Split text into overlapping chunks.
-
+    
     Parameters:
         text (str): The text to be chunked.
         chunk_size (int): Number of words per chunk.
         overlap (int): Number of overlapping words between chunks.
-
+        
     Returns:
         list of str: A list of text chunks.
     """
@@ -56,21 +54,21 @@ def chunk_text(text, chunk_size=500, overlap=50):
         i += chunk_size - overlap
     return chunks
 
-def process_pdfs(pdf_paths, chunk_size=500, overlap=50):
+def process_pdfs(pdf_files, chunk_size=500, overlap=50):
     """
-    Process multiple PDFs into text chunks.
-
+    Process multiple uploaded PDF files into text chunks.
+    
     Parameters:
-        pdf_paths (list): List of PDF file paths.
+        pdf_files (list): List of UploadedFile objects.
         chunk_size (int): Number of words per chunk.
         overlap (int): Overlap in words between chunks.
-
+        
     Returns:
         list: Combined list of all text chunks.
     """
     all_chunks = []
-    for pdf_path in pdf_paths:
-        text = extract_text_from_pdf(pdf_path)
+    for pdf_file in pdf_files:
+        text = extract_text_from_pdf(pdf_file)
         cleaned = clean_text(text)
         chunks = chunk_text(cleaned, chunk_size=chunk_size, overlap=overlap)
         all_chunks.extend(chunks)
@@ -82,11 +80,11 @@ def process_pdfs(pdf_paths, chunk_size=500, overlap=50):
 def create_embedding_index(chunks, model):
     """
     Compute embeddings for text chunks and build a FAISS index.
-
+    
     Parameters:
         chunks (list): List of text chunks.
         model (SentenceTransformer): Pre-trained embedding model.
-
+        
     Returns:
         tuple: (FAISS index, numpy array of embeddings)
     """
@@ -100,10 +98,10 @@ def create_embedding_index(chunks, model):
 def create_bm25_index(chunks):
     """
     Build a BM25 index from the text chunks.
-
+    
     Parameters:
         chunks (list): List of text chunks.
-
+        
     Returns:
         tuple: (BM25 index, tokenized corpus)
     """
@@ -117,12 +115,12 @@ def create_bm25_index(chunks):
 def retrieve(query, chunks, embedding_index, embeddings, embed_model, bm25, tokenized_corpus, cross_encoder, top_k=5):
     """
     Retrieve relevant chunks for a given query.
-
+    
     The function:
       - Validates the query (input-side guard rail)
       - Retrieves candidates using FAISS and BM25
       - Combines candidates and re-ranks them with a cross-encoder
-
+    
     Returns:
         tuple: (top answer, confidence score, ranked candidate list)
     """
@@ -154,9 +152,9 @@ def retrieve(query, chunks, embedding_index, embeddings, embed_model, bm25, toke
     cross_scores = cross_encoder.predict(cross_inputs)
     ranked_candidates = sorted(zip(candidate_set, cross_scores), key=lambda x: x[1], reverse=True)
 
-    # For output-side guard rail, you might flag or filter low-confidence answers.
+    # Output-side guard rail: flag low-confidence answers.
     top_candidate, top_score = ranked_candidates[0]
-    if top_score < 0.3:  # threshold for low confidence (this value is for demonstration)
+    if top_score < 0.3:  # threshold for low confidence (for demonstration)
         st.info("Low confidence in retrieved answer.")
 
     return top_candidate, top_score, ranked_candidates
@@ -168,55 +166,59 @@ def main():
     st.title("Financial Statements RAG System")
     st.write("This system retrieves information from the last two years of financial statements.")
 
-    # 1. Data Collection & Preprocessing
-    pdf_paths = ["/content/RIL-Integrated-Annual-Report-2022-23.pdf", "/content/RIL-Integrated-Annual-Report-2023-24.pdf"]
-    st.write("Processing PDF files...")
-    chunks = process_pdfs(pdf_paths, chunk_size=500, overlap=50)
-    st.write(f"Total text chunks generated: {len(chunks)}")
+    # Ask the user to upload 2 PDF files.
+    uploaded_files = st.file_uploader("Upload 2 PDF files", accept_multiple_files=True, type=["pdf"])
 
-    # 2. Load models for embedding and re-ranking
-    with st.spinner("Loading models..."):
-        embed_model = SentenceTransformer('all-MiniLM-L6-v2')
-        cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+    if uploaded_files and len(uploaded_files) == 2:
+        st.write("Processing PDF files...")
+        chunks = process_pdfs(uploaded_files, chunk_size=500, overlap=50)
+        st.write(f"Total text chunks generated: {len(chunks)}")
 
-    # 3. Build indexes
-    st.write("Building vector index with FAISS...")
-    embedding_index, embeddings = create_embedding_index(chunks, embed_model)
-    st.write("Building BM25 index...")
-    bm25, tokenized_corpus = create_bm25_index(chunks)
-    st.success("Indices built successfully!")
+        # 2. Load models for embedding and re-ranking
+        with st.spinner("Loading models..."):
+            embed_model = SentenceTransformer('all-MiniLM-L6-v2')
+            cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
 
-    # 4. Accept user query via UI
-    st.header("Query Financial Data")
-    query = st.text_input("Enter your financial query:")
-    if st.button("Submit Query") and query:
-        result = retrieve(query, chunks, embedding_index, embeddings, embed_model, bm25, tokenized_corpus, cross_encoder, top_k=5)
-        if result:
-            answer, confidence, ranked_candidates = result
-            st.write("### Answer:")
-            st.write(answer)
-            st.write(f"**Confidence Score:** {confidence:.2f}")
-        else:
-            st.write("No answer due to guard rail filtering.")
+        # 3. Build indexes
+        st.write("Building vector index with FAISS...")
+        embedding_index, embeddings = create_embedding_index(chunks, embed_model)
+        st.write("Building BM25 index...")
+        bm25, tokenized_corpus = create_bm25_index(chunks)
+        st.success("Indices built successfully!")
 
-    # 5. Testing & Validation Section
-    st.sidebar.title("Testing & Validation")
-    st.sidebar.write("Click a test query to evaluate the system:")
-    test_queries = {
-        "High Confidence Financial Query": "What was the revenue growth in Q4 2023?",
-        "Low Confidence Financial Query": "How did the company manage expenses during market volatility?",
-        "Irrelevant Query": "What is the capital of France?"
-    }
-    for label, test_query in test_queries.items():
-        if st.sidebar.button(label):
-            result = retrieve(test_query, chunks, embedding_index, embeddings, embed_model, bm25, tokenized_corpus, cross_encoder, top_k=5)
-            st.sidebar.write(f"**Query:** {test_query}")
+        # 4. Accept user query via UI
+        st.header("Query Financial Data")
+        query = st.text_input("Enter your financial query:")
+        if st.button("Submit Query") and query:
+            result = retrieve(query, chunks, embedding_index, embeddings, embed_model, bm25, tokenized_corpus, cross_encoder, top_k=5)
             if result:
-                answer, confidence, _ = result
-                st.sidebar.write("**Answer:**", answer)
-                st.sidebar.write("**Confidence Score:**", confidence)
+                answer, confidence, ranked_candidates = result
+                st.write("### Answer:")
+                st.write(answer)
+                st.write(f"**Confidence Score:** {confidence:.2f}")
             else:
-                st.sidebar.write("Query was filtered out.")
+                st.write("No answer due to guard rail filtering.")
+
+        # 5. Testing & Validation Section
+        st.sidebar.title("Testing & Validation")
+        st.sidebar.write("Click a test query to evaluate the system:")
+        test_queries = {
+            "High Confidence Financial Query": "What was the revenue growth in Q4 2023?",
+            "Low Confidence Financial Query": "How did the company manage expenses during market volatility?",
+            "Irrelevant Query": "What is the capital of France?"
+        }
+        for label, test_query in test_queries.items():
+            if st.sidebar.button(label):
+                result = retrieve(test_query, chunks, embedding_index, embeddings, embed_model, bm25, tokenized_corpus, cross_encoder, top_k=5)
+                st.sidebar.write(f"**Query:** {test_query}")
+                if result:
+                    answer, confidence, _ = result
+                    st.sidebar.write("**Answer:**", answer)
+                    st.sidebar.write("**Confidence Score:**", confidence)
+                else:
+                    st.sidebar.write("Query was filtered out.")
+    else:
+        st.info("Please upload exactly 2 PDF files to proceed.")
 
 if __name__ == "__main__":
     main()
