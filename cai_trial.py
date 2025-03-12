@@ -14,6 +14,7 @@ import faiss
 import streamlit as st
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from rank_bm25 import BM25Okapi
+from transformers import pipeline
 
 #########################
 # Data Collection & Preprocessing
@@ -122,7 +123,7 @@ def retrieve(query, chunks, embedding_index, embeddings, embed_model, bm25, toke
       - Combines candidates and re-ranks them with a cross-encoder
     
     Returns:
-        tuple: (top answer, confidence score, ranked candidate list)
+        tuple: (top candidate chunk, confidence score, ranked candidate list)
     """
     # Input-Side Guard Rail: Basic filtering for financial-related keywords.
     finance_keywords = ['revenue', 'profit', 'financial', 'income', 'expense', 'cash', 'growth', 'market']
@@ -160,11 +161,31 @@ def retrieve(query, chunks, embedding_index, embeddings, embed_model, bm25, toke
     return top_candidate, top_score, ranked_candidates
 
 #########################
+# Response Generation using a Small Open-Source Language Model
+#########################
+def generate_response(query, context, generator, max_length=150):
+    """
+    Generate a synthesized response based on the query and retrieved context.
+    
+    Parameters:
+        query (str): The user query.
+        context (str): Retrieved text context.
+        generator: A text-generation pipeline.
+        max_length (int): Maximum length of generated text.
+        
+    Returns:
+        str: The generated answer.
+    """
+    prompt = f"Question: {query}\nContext: {context}\nAnswer:"
+    generated = generator(prompt, max_length=max_length, num_return_sequences=1)
+    return generated[0]['generated_text']
+
+#########################
 # UI Development with Streamlit
 #########################
 def main():
-    st.title("Financial Statements RAG System")
-    st.write("This system retrieves information from the last two years of financial statements.")
+    st.title("Financial Statements RAG System with Response Generation")
+    st.write("This system retrieves information from the last two years of financial statements and generates a synthesized answer.")
 
     # Ask the user to upload 2 PDF files.
     uploaded_files = st.file_uploader("Upload 2 PDF files", accept_multiple_files=True, type=["pdf"])
@@ -174,11 +195,13 @@ def main():
         chunks = process_pdfs(uploaded_files, chunk_size=500, overlap=50)
         st.write(f"Total text chunks generated: {len(chunks)}")
 
-        # Load models for embedding and re-ranking
+        # Load models for embedding, re-ranking, and response generation
         with st.spinner("Loading models..."):
             embed_model = SentenceTransformer('all-MiniLM-L6-v2')
             cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-
+            # Load a small open-source language model for text generation (e.g., distilgpt2)
+            generator = pipeline("text-generation", model="distilgpt2")
+        
         # Build indexes
         st.write("Building vector index with FAISS...")
         embedding_index, embeddings = create_embedding_index(chunks, embed_model)
@@ -190,12 +213,16 @@ def main():
         st.header("Query Financial Data")
         query = st.text_input("Enter your financial query:")
         if st.button("Submit Query") and query:
-            result = retrieve(query, chunks, embedding_index, embeddings, embed_model, bm25, tokenized_corpus, cross_encoder, top_k=5)
-            if result:
-                answer, confidence, ranked_candidates = result
-                st.write("### Answer:")
-                st.write(answer)
+            retrieval_result = retrieve(query, chunks, embedding_index, embeddings, embed_model, bm25, tokenized_corpus, cross_encoder, top_k=5)
+            if retrieval_result:
+                top_candidate, confidence, ranked_candidates = retrieval_result
+                st.write("### Retrieved Context:")
+                st.write(top_candidate)
                 st.write(f"**Confidence Score:** {confidence:.2f}")
+                # Generate a final answer using the retrieved context and the generator
+                final_answer = generate_response(query, top_candidate, generator, max_length=150)
+                st.write("### Generated Answer:")
+                st.write(final_answer)
             else:
                 st.write("No answer due to guard rail filtering.")
     else:
