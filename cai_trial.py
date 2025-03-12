@@ -126,7 +126,6 @@ def retrieve(query, chunks, embedding_index, embeddings, embed_model, bm25, toke
         tuple: (top candidate chunk, confidence score, ranked candidate list)
     """
     # Input-Side Guard Rail: Basic filtering for financial-related keywords.
-    def retrieve(query, chunks, embedding_index, embeddings, embed_model, bm25, tokenized_corpus, cross_encoder, top_k=5):
     # Updated guard rail keywords
         finance_keywords = [
         'revenue', 'profit', 'financial', 'income', 'expense', 'cash', 
@@ -137,9 +136,6 @@ def retrieve(query, chunks, embedding_index, embeddings, embed_model, bm25, toke
         st.warning("Query does not appear to be related to financial data.")
         return None
 
-    # --- rest of the function remains the same ---
-    query_embedding = embed_model.encode([query], convert_to_tensor=False)
-    ...
 
     # FAISS retrieval using embeddings
     query_embedding = embed_model.encode([query], convert_to_tensor=False)
